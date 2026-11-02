@@ -4,6 +4,9 @@
 #include "project/binary_search_tree.h"
 
 #include <stdexcept>
+#include <algorithm>
+#include <limits>
+#include <random>
 #include <vector>
 
 TEST_CASE("BST empty-state and size checks") {
@@ -171,4 +174,79 @@ TEST_CASE("BST contains is consistent with search") {
         REQUIRE_FALSE(tree.contains(value));
         REQUIRE_FALSE(tree.search(value));
     }
+}
+
+TEST_CASE("BST empty removal, one-child roots, and reuse") {
+    BinarySearchTree tree;
+    REQUIRE_FALSE(tree.remove(1));
+    REQUIRE_FALSE(tree.search(1));
+    for (int child : {5, 15}) {
+        REQUIRE(tree.insert(10));
+        REQUIRE(tree.insert(child));
+        REQUIRE(tree.remove(10));
+        REQUIRE(tree.size() == 1);
+        REQUIRE(tree.height() == 1);
+        REQUIRE(tree.minimum() == child);
+        REQUIRE(tree.maximum() == child);
+        REQUIRE(tree.remove(child));
+        REQUIRE(tree.empty());
+        REQUIRE(tree.height() == 0);
+        REQUIRE_THROWS_AS(tree.minimum(), std::logic_error);
+        REQUIRE_THROWS_AS(tree.maximum(), std::logic_error);
+    }
+}
+
+TEST_CASE("BST deletion keeps the successor's right child") {
+    BinarySearchTree tree;
+    for (int value : {50, 30, 80, 60, 90, 65}) {
+        tree.insert(value);
+    }
+    REQUIRE(tree.remove(50));
+    REQUIRE(tree.size() == 5);
+    REQUIRE(tree.inorderTraversal() == std::vector<int>{30, 60, 65, 80, 90});
+    REQUIRE(tree.preorderTraversal() == std::vector<int>{60, 30, 80, 65, 90});
+    REQUIRE(tree.postorderTraversal() == std::vector<int>{30, 65, 90, 80, 60});
+}
+
+TEST_CASE("BST supports the full integer range") {
+    BinarySearchTree tree;
+    const int low = std::numeric_limits<int>::min();
+    const int high = std::numeric_limits<int>::max();
+    for (int value : {0, low, high}) {
+        REQUIRE(tree.insert(value));
+        REQUIRE_FALSE(tree.insert(value));
+        REQUIRE(tree.contains(value));
+    }
+    REQUIRE(tree.minimum() == low);
+    REQUIRE(tree.maximum() == high);
+    REQUIRE(tree.remove(0));
+    REQUIRE(tree.inorderTraversal() == std::vector<int>{low, high});
+}
+
+TEST_CASE("BST shuffled insertion and removal preserve ordering and size") {
+    BinarySearchTree tree;
+    std::vector<int> keys;
+    for (int value = -128; value < 128; ++value) {
+        keys.push_back(value);
+    }
+    auto remaining = keys;
+    std::mt19937 random(42);
+    std::shuffle(keys.begin(), keys.end(), random);
+    for (int value : keys) {
+        REQUIRE(tree.insert(value));
+    }
+    std::shuffle(keys.begin(), keys.end(), random);
+    for (int value : keys) {
+        REQUIRE(tree.remove(value));
+        remaining.erase(std::lower_bound(remaining.begin(), remaining.end(), value));
+        REQUIRE(tree.size() == remaining.size());
+        REQUIRE(tree.inorderTraversal() == remaining);
+        REQUIRE_FALSE(tree.contains(value));
+        REQUIRE_FALSE(tree.remove(value));
+        if (!remaining.empty()) {
+            REQUIRE(tree.minimum() == remaining.front());
+            REQUIRE(tree.maximum() == remaining.back());
+        }
+    }
+    REQUIRE(tree.empty());
 }
